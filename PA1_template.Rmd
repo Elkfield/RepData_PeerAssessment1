@@ -6,20 +6,112 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+# reproducible research: week 2 - activity 11
+
+## Activate libraries
+```{r}
+library(tidyverse)
+library(lubridate)
+library(missForest)
+library(ggplot2)
+```
+
+## Read in the data
+```{r}
+dta <- read.table(file = "activity.csv", header = TRUE, sep = ",")
+
+dta$date <- as.Date(dta$date)
+
+dta$month <- month(dta$date)
+dta$year  <- year(dta$date)
+dta$day   <- day(dta$date)
+```
+
+## Do a histogram of the steps each day
+```{r}
+dta %>% 
+  group_by(date) %>%
+  summarise(total_steps = sum(steps, na.rm = TRUE)) ->
+  daily_steps
+
+hist(daily_steps$total_steps)
+```
+
+## Mean and median of the steps each day
+```{r}
+daily_steps %>%
+  summarise(steps_mean = mean(total_steps, na.rm = TRUE), 
+            steps_median = median(total_steps, na.rm = TRUE)) ->
+  steps_mean_median
+
+print(steps_mean_median)
+```
+
+
+## Time series plot of the average number of steps taken
+```{r}
+dta %>% 
+  group_by(date) %>%
+  summarise(steps_mean = mean(steps, na.rm = TRUE)) ->
+  dta_mean_daily
+
+plot(y = dta_mean_daily$steps_mean, x = dta_mean_daily$date, type = "l")
+```
 
 
 
-## What is mean total number of steps taken per day?
+## The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r}
+  dta %>%
+    group_by(interval) %>%
+    summarise(steps_mean = mean(steps, na.rm = TRUE)) ->
+    steps_mean_interval
+    
+steps_mean_interval[which.max(steps_mean_interval$steps_mean), "interval"]
+```
+
+## Code to describe and show a strategy for imputing missing data
+
+There are several possibilities to impute missing data. Contrary to normal regression when imputing data normally an 'elephant' model is used, meaning also using variables in the regression model to describe missing variables which are normally not used, e.g. due to low p-value.
+
+In terms of packages there are many packages out there to impute missing data. One simple solution is the missForest package which uses random forests to impute missing data. Other possibilities could be the mice package or the midas package.
+
+Generally the rule holds that when building after the imputation a model, at least all the variables which will be used in the subsequent model should be used in the imputation process/model.
+```{r}
+dta_matrix <- as.matrix(dta %>% select(-one_of("date")))
+
+dta_imputed <- missForest(dta_matrix)
+dta_imputed <- as.data.frame(dta_imputed$ximp)
+dta_imputed$date <- as.Date(paste0(dta_imputed$year, "-", dta_imputed$month, "-", dta_imputed$day))
+
+```
+
+## Histogram of the total number of steps taken each day after missing values are imputed
+
+```{r}
+dta_imputed %>% 
+  group_by(date) %>%
+  summarise(total_steps = sum(steps, na.rm = TRUE)) ->
+  daily_steps_imputed
+
+hist(daily_steps_imputed$total_steps)
+```
 
 
+## Make a panel plot containing a time series plot after creating weekday/weekend
 
-## What is the average daily activity pattern?
+```{r}
+dta_wd <- dta_imputed %>%
+  mutate(wd = ifelse(weekdays(date) %in% c("Samstag", "Sonntag", "Sunday", "Saturday"), 
+                     "weekend", "weekday"))
+
+dta_wd <- aggregate(steps ~ interval + wd, data = dta_wd, mean)
+ggplot(dta_wd, aes(interval, steps)) + 
+    geom_line() + 
+    facet_grid(wd ~ .) +
+    xlab("5-minute interval") + 
+    ylab("avarage number of steps")
+```
 
 
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
